@@ -47,7 +47,7 @@ pcl::PointCloud<pcl::PointXYZ>::Ptr CreateData()
 pcl::PointCloud<pcl::PointXYZ>::Ptr CreateData3D()
 {
 	ProcessPointClouds<pcl::PointXYZ> pointProcessor;
-	return pointProcessor.loadPcd("../../../sensors/data/pcd/simpleHighway.pcd");
+	return pointProcessor.loadPcd("/home/boom/SFND_Lidar_Obstacle_Detection/src/sensors/data/pcd/simpleHighway.pcd");
 }
 
 
@@ -76,6 +76,152 @@ std::unordered_set<int> Ransac(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, int ma
 	// If distance is smaller than threshold count it as inlier
 
 	// Return indicies of inliers from fitted line with most inliers
+
+	while (maxIterations--){
+		//Create an inlier set that is initially empty (prevent replication in population of 2 points)
+		std::unordered_set<int> inliers;
+		
+		//Populate the unoderded set with 2 inliers index from the cloud
+		while(inliers.size()<2){
+			inliers.insert(rand()%(cloud->points.size()));
+		}
+
+		//Then we get x1, y1, x2, y2, etc for line equation
+		float x1, y1, x2, y2;
+
+		//Should get the 2 point that form the line
+		auto it = inliers.begin();
+		x1 = cloud->points[*it].x;
+		y1 = cloud->points[*it].y;
+
+		++it;
+
+		x2 = cloud->points[*it].x;
+		y2 = cloud->points[*it].y;
+
+		// Get the line equation coefficient terms
+		float A, B, C;
+		A = y1 - y2;
+		B = x2 - x1;
+		C = x1*y2 - x2*y1;
+
+		//Loop through all the points
+
+		for (auto itPt = cloud->points.begin(); itPt != cloud->points.end(); ++itPt){
+
+			float distance;
+			float x,y;
+
+			//Check if the point is the one we have already included
+			//First calculate the index of point being iterate
+			//Check if it is already in the inliers group
+			if (inliers.count(itPt - cloud->points.begin())){
+				//Already inside inliers, skipping
+				continue;
+			}
+
+			//Extract cordinates and calculate distance
+			x = itPt->x;
+			y = itPt->y;
+
+			//Distance
+			distance = fabs(A*x+B*y+C)/sqrt(pow(A,2)+pow(B,2));
+
+			//Check distance and tolerance and add to inliers
+			if (distance <= distanceTol){
+				inliers.insert(itPt - cloud->points.begin());
+			}
+		}
+		//Check if this iterations has more inliers than the previous ones and assign to the results
+		if (inliers.size() >= inliersResult.size())
+			inliersResult = inliers;
+	}
+	
+	return inliersResult;
+
+}
+
+std::unordered_set<int> RansacPlane(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, int maxIterations, float distanceTol)
+{
+	std::unordered_set<int> inliersResult;
+	srand(time(NULL));
+
+	while (maxIterations--){
+		//Create an inlier set that is initially empty (prevent replication in population of 3 points)
+		std::unordered_set<int> inliers;
+		
+		//Populate the unoderded set with 3 inliers index from the cloud data
+		while(inliers.size()<3){
+			inliers.insert(rand()%(cloud->points.size()));
+		}
+
+		//Need this for plane equation
+		float x1, y1, z1; 
+		float x2, y2, z2; 
+		float x3, y3, z3;
+
+		//Random sample 3 points for a plane
+		auto it = inliers.begin();
+		x1 = cloud->points[*it].x;
+		y1 = cloud->points[*it].y;
+		z1 = cloud->points[*it].z;
+
+		++it;
+
+		x2 = cloud->points[*it].x;
+		y2 = cloud->points[*it].y;
+		z2 = cloud->points[*it].z;
+
+		++it;
+
+		x3 = cloud->points[*it].x;
+		y3 = cloud->points[*it].y;
+		z3 = cloud->points[*it].z;
+
+		// Coefficient for Plane and distance
+		float i, j, k;
+		float A, B, C, D;
+
+		i = (y2-y1)*(z3-z1) - (z2-z1)*(y3-y1);
+		j = (z2-z1)*(x3-x1) - (x2-x1)*(z3-z1);
+		k = (x2-x1)*(y3-y1) - (y2-y1)*(x3-x1);
+
+		A = i;
+		B = j;
+		C = k;
+		D = - (i*x1 + j*y1 + k*z1);
+
+		//Loop through all the points in point cloud
+		for (auto itPt = cloud->points.begin(); itPt != cloud->points.end(); ++itPt){
+
+			float distance;
+			float x,y,z;
+
+			//Check if the point is the one we have already included
+			//First calculate the index of point being iterate
+			//Check if it is already in the inliers group
+			if (inliers.count(itPt - cloud->points.begin())){
+				//Already inside inliers, skipping
+				continue;
+			}
+
+			//Extract cordinates and calculate distance
+			x = itPt->x;
+			y = itPt->y;
+			z = itPt->z;
+
+			//Distance
+			distance = fabs(A*x+B*y+C*z+D)/sqrt(pow(A,2)+pow(B,2)+pow(C,2));
+
+			//Check distance and tolerance and add to inliers
+			if (distance <= distanceTol){
+				inliers.insert(itPt - cloud->points.begin());
+			}
+		}
+		//Check if this iterations has more inliers than the previous ones and assign to the results
+		if (inliers.size() >= inliersResult.size())
+			inliersResult = inliers;
+	}
 	
 	return inliersResult;
 
@@ -88,11 +234,11 @@ int main ()
 	pcl::visualization::PCLVisualizer::Ptr viewer = initScene();
 
 	// Create data
-	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = CreateData();
+	pcl::PointCloud<pcl::PointXYZ>::Ptr cloud = CreateData3D();
 	
 
 	// TODO: Change the max iteration and distance tolerance arguments for Ransac function
-	std::unordered_set<int> inliers = Ransac(cloud, 0, 0);
+	std::unordered_set<int> inliers = RansacPlane(cloud, 100 , 0.2);
 
 	pcl::PointCloud<pcl::PointXYZ>::Ptr  cloudInliers(new pcl::PointCloud<pcl::PointXYZ>());
 	pcl::PointCloud<pcl::PointXYZ>::Ptr cloudOutliers(new pcl::PointCloud<pcl::PointXYZ>());
@@ -124,3 +270,5 @@ int main ()
   	}
   	
 }
+
+

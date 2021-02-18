@@ -41,9 +41,28 @@ typename pcl::PointCloud<PointT>::Ptr ProcessPointClouds<PointT>::FilterCloud(ty
 template<typename PointT>
 std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::SeparateClouds(pcl::PointIndices::Ptr inliers, typename pcl::PointCloud<PointT>::Ptr cloud) 
 {
-  // TODO: Create two new point clouds, one cloud with obstacles and other with segmented plane
+  //Create two new point clouds, one cloud with obstacles and other with segmented plane
+    typename pcl::PointCloud<PointT>::Ptr segmentedPlane(new pcl::PointCloud<PointT>);
+    typename pcl::PointCloud<PointT>::Ptr obstacles(new pcl::PointCloud<PointT>);
+    
+    // Create the filtering object
+    pcl::ExtractIndices<PointT> extract;
 
-    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult(cloud, cloud);
+    //Filtering largest plane inliers out of the point cloud
+    extract.setInputCloud(cloud);
+    extract.setIndices(inliers);
+
+    //Selecting all points in pointcloud whose are inliers
+    extract.setNegative(false);
+    extract.filter(*segmentedPlane);
+    std::cerr << "PointCloud representing the planar component: " << segmentedPlane->width * segmentedPlane->height << " data points." << std::endl;
+
+    //Selecting all points that are outliers (not the planar components)
+    extract.setNegative(true);
+    extract.filter(*obstacles);
+
+    //Return obstacle then segmented
+    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult(obstacles, segmentedPlane);
     return segResult;
 }
 
@@ -53,15 +72,143 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
 {
     // Time segmentation process
     auto startTime = std::chrono::steady_clock::now();
-	pcl::PointIndices::Ptr inliers;
-    // TODO:: Fill in this function to find inliers for the cloud.
+    //Will this even works if on stack?
+    pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients ());
+    pcl::PointIndices::Ptr inliers (new pcl::PointIndices ());
+    //Create Segmentation object (In charge of segmenting the plane with RANSAC of SAC)
+    pcl::SACSegmentation<PointT> seg;
 
+    seg.setModelType(pcl::SACMODEL_PLANE); // For plane extraction
+    seg.setMethodType(pcl::SAC_RANSAC); //SAC method is Random sample consensus
+    seg.setMaxIterations(maxIterations);
+    seg.setDistanceThreshold(distanceThreshold);
+
+    seg.setInputCloud(cloud);
+    seg.segment (*inliers, *coefficients); // Pass pointers by reference by dereference them
+    if (inliers->indices.size () == 0)
+    {
+      std::cerr << "Could not estimate a planar model for the given dataset." << std::endl;
+    }
+    // Filter and extract the inliers of the cloud (those that belongs to the same surface)
+    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult = SeparateClouds(inliers,cloud);
+    //Since road is the big flat surface, we should end up with separating it from the rest of the objects
     auto endTime = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "plane segmentation took " << elapsedTime.count() << " milliseconds" << std::endl;
-
-    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult = SeparateClouds(inliers,cloud);
+    
     return segResult;
+}
+
+template<typename PointT>
+std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::Segment(typename pcl::PointCloud<PointT>::Ptr cloud, int maxIterations, float distanceThreshold)
+{
+    std::cout << "Using our own RANSAC..." << std::endl;
+    //Timing
+    auto startTime = std::chrono::steady_clock::now();
+
+    //Set seed and to store result
+    std::unordered_set<int> inliersResult;
+	srand(time(NULL));
+
+    //RANSAC implementation
+
+	while (maxIterations--){
+		//Create an inlier set that is initially empty (prevent replication in population of 3 points)
+		std::unordered_set<int> inliers;
+		
+		//Populate the unoderded set with 3 inliers index from the cloud data
+		while(inliers.size()<3){
+			inliers.insert(rand()%(cloud->points.size()));
+		}
+
+		//Need this for plane equation
+		float x1, y1, z1; 
+		float x2, y2, z2; 
+		float x3, y3, z3;
+
+		//Random sample 3 points for a plane
+		auto it = inliers.begin();
+		x1 = cloud->points[*it].x;
+		y1 = cloud->points[*it].y;
+		z1 = cloud->points[*it].z;
+
+		++it;
+
+		x2 = cloud->points[*it].x;
+		y2 = cloud->points[*it].y;
+		z2 = cloud->points[*it].z;
+
+		++it;
+
+		x3 = cloud->points[*it].x;
+		y3 = cloud->points[*it].y;
+		z3 = cloud->points[*it].z;
+
+		// Coefficient for Plane and distance
+		float i, j, k;
+		float A, B, C, D;
+
+		i = (y2-y1)*(z3-z1) - (z2-z1)*(y3-y1);
+		j = (z2-z1)*(x3-x1) - (x2-x1)*(z3-z1);
+		k = (x2-x1)*(y3-y1) - (y2-y1)*(x3-x1);
+
+		A = i;
+		B = j;
+		C = k;
+		D = - (i*x1 + j*y1 + k*z1);
+
+		//Loop through all the points in point cloud
+		for (auto itPt = cloud->points.begin(); itPt != cloud->points.end(); ++itPt){
+
+			float distance;
+			float x,y,z;
+
+			//Check if the point is the one we have already included
+			//First calculate the index of point being iterate
+			//Check if it is already in the inliers group
+			if (inliers.count(itPt - cloud->points.begin())){
+				//Already inside inliers, skipping
+				continue;
+			}
+
+			//Extract cordinates and calculate distance
+			x = itPt->x;
+			y = itPt->y;
+			z = itPt->z;
+
+			//Distance
+			distance = fabs(A*x+B*y+C*z+D)/sqrt(pow(A,2)+pow(B,2)+pow(C,2));
+
+			//Check distance and tolerance and add to inliers
+			if (distance <= distanceThreshold){
+				inliers.insert(itPt - cloud->points.begin());
+			}
+		}
+		//Check if this iterations has more inliers than the previous ones and assign to the results
+		if (inliers.size() >= inliersResult.size())
+			inliersResult = inliers;
+	}
+
+    // Filter and extract the inliers of the cloud (those that belongs to the same surface)
+    typename pcl::PointCloud<PointT>::Ptr  cloudInliers(new pcl::PointCloud<PointT>());
+	typename pcl::PointCloud<PointT>::Ptr cloudOutliers(new pcl::PointCloud<PointT>());
+
+	for(int index = 0; index < cloud->points.size(); index++)
+	{
+		PointT point = cloud->points[index];
+		if(inliersResult.count(index))
+			cloudInliers->points.push_back(point);
+		else
+			cloudOutliers->points.push_back(point);
+	}
+    //Since road is the big flat surface, we should end up with separating it from the rest of the objects
+    auto endTime = std::chrono::steady_clock::now();
+    auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+    std::cout << "plane segmentation took " << elapsedTime.count() << " milliseconds" << std::endl;
+    
+    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult(cloudOutliers, cloudInliers);
+    return segResult;
+
 }
 
 

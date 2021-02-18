@@ -53,9 +53,14 @@ void simpleHighway(pcl::visualization::PCLVisualizer::Ptr& viewer)
     //renderRays(viewer,lidarSensor->position,pointCloudGenerated);
     renderPointCloud(viewer,pointCloudGenerated,"rendered");
 
+    //Create a point processor
+    ProcessPointClouds<pcl::PointXYZ> pointProcessor;
 
-    // TODO:: Create point processor
-  
+    //Process and render the planar and obstacle components
+    auto segmentedPair = pointProcessor.Segment(pointCloudGenerated,100,0.2);
+    renderPointCloud(viewer,segmentedPair.first,"obstacles",Color(1,0,0));
+    renderPointCloud(viewer,segmentedPair.second,"segmented plane",Color(0,1,0));
+
 }
 
 
