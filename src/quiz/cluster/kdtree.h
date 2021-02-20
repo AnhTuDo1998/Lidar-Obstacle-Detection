@@ -61,7 +61,61 @@ struct KdTree
 	std::vector<int> search(std::vector<float> target, float distanceTol)
 	{
 		std::vector<int> ids;
+		searchHelper(root,0,target,distanceTol,ids);
+
 		return ids;
+	}
+
+	// A search helper to iterate and save the answers
+	void searchHelper(Node *& node, int depth, std::vector<float> target, float distanceTol, std::vector<int> & ids){
+		//If the node reached is NULL, we have search all over the tree, time to go up
+		if (node == NULL){
+			cout << "Reached a leaf node, time to recurse up ^" << endl;
+		}
+
+		else{
+			// If we haven't reach the end of the tree:
+			// First Attempt methodology: 
+			// L2 norm is calculated everytime a node is visited => expensive due to square root
+			// If the target node is smaller than the slice of current node, check only one side of it =>
+			// Even we choose 2 if phase for iterate left and right, only 1 branch will be visited (in short this is okay for finding where to insert)
+
+			// Our goal for this part is however to find all the points that is nearest to our target within a boundary region.
+			// Boundary is a box and if let say both extreme side of the box belongs to 2 different splitting region, we need to evaluate both branch of the tree.
+			// Use box checking as a cheaper algorithm than quickly go caluclate L2 Norm as this would be cheaper
+			
+			//Attemp 2:
+			//Firstly, decide if it is worth it to do an L2 norm calculation
+			//Check if the coordinate of node visited is within the box region
+			if ((node->point[0] >= target[0]- distanceTol || node->point[0] <= target[0] + distanceTol) && (node->point[1] >= target[1]- distanceTol || node->point[1] <= target[1] + distanceTol)){
+				// Now justify to go into this expensive operation (making sure it is inside a circle within the square and not on the square edge only)
+				cout << "Visiting node: " << node->id << endl;
+				float sumSquaredDiff = 0;
+				for (int i = 0; i < target.size(); ++i){
+					sumSquaredDiff += pow((target[i]-node->point[i]),2);
+				}
+
+				float euclidDist = sqrt(sumSquaredDiff);
+
+				if (euclidDist <= distanceTol){
+					cout << "Inserting as distance "<< euclidDist << " is within tolerance "<< distanceTol << endl;
+					ids.push_back(node->id);
+				}
+			}
+			
+			// Then regardless of belongs to the circle, square or not at all, narrow down or visit both the search space to the sides of the x or y-split
+			//which contain our box.
+
+			int depthRemainder = depth % 2;
+			if (target.at(depthRemainder) - distanceTol < node->point.at(depthRemainder))
+				//To the left it is
+				searchHelper(node->left,depth+1,target, distanceTol, ids);
+			if (target.at(depthRemainder) + distanceTol > node->point.at(depthRemainder))
+				searchHelper(node->right,depth+1,target,distanceTol, ids);
+
+			//Done then will just wrap up to root and terminated
+
+		}
 	}
 	
 
