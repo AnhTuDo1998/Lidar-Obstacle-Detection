@@ -75,12 +75,45 @@ void render2DTree(Node* node, pcl::visualization::PCLVisualizer::Ptr& viewer, Bo
 
 }
 
+void fillCluster(int index, const std::vector<std::vector<float>>& points, KdTree* tree, float distanceTol, std::vector<int> & cluster, std::vector<int> & processed)
+{
+	//Add the point to the vector and marked as proccessed
+	processed.push_back(index);
+	cluster.push_back(index);
+
+	//Find the nearby point
+	std::vector<int> neighbours = tree->search(points[index],distanceTol);
+
+	//Loop through the point recursively until all eligible and not owned points is in this cluster
+	for (auto near_iter = neighbours.begin(); near_iter != neighbours.end();++near_iter){
+		int idx = *near_iter;
+		if (std::find(processed.begin(),processed.end(),idx) == processed.end())
+			fillCluster(*near_iter, points, tree, distanceTol, cluster, processed);
+	}
+}
+
 std::vector<std::vector<int>> euclideanCluster(const std::vector<std::vector<float>>& points, KdTree* tree, float distanceTol)
 {
-
-	// TODO: Fill out this function to return list of indices for each cluster
-
+	std::vector<int> processed;
 	std::vector<std::vector<int>> clusters;
+
+	for (auto iter = points.begin(); iter != points.end() ; ++iter){
+		//If not already processed
+		int idx = iter - points.begin();
+
+		if (std::find(processed.begin(), processed.end(), idx)!= processed.end())
+			continue;
+
+		else{
+			// Create a new cluster
+			std::vector<int> cluster;
+			// Fill the cluster
+			fillCluster(idx, points, tree, distanceTol, cluster, processed);
+			//Push the cluster back into the list of clusters
+			clusters.push_back(cluster);
+		}
+		
+	}
  
 	return clusters;
 
