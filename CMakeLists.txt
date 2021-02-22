@@ -19,14 +19,15 @@ add_executable (environment src/environment.cpp src/render/render.cpp src/proces
 target_link_libraries (environment ${PCL_LIBRARIES})
 
 #Uncomment this for the tutorial
-add_executable (extract_indices src/tutorials/extract_indices.cpp)
-target_link_libraries (extract_indices ${PCL_LIBRARIES})
+# add_executable (extract_indices src/tutorials/extract_indices.cpp)
+# target_link_libraries (extract_indices ${PCL_LIBRARIES})
 
-add_executable (clustering src/tutorials/clustering.cpp)
-target_link_libraries (clustering ${PCL_LIBRARIES})
+# add_executable (clustering src/tutorials/clustering.cpp)
+# target_link_libraries (clustering ${PCL_LIBRARIES})
 
 #For quiz
 #add_subdirectory(src/quiz/ransac)
+#add_subdirectory(src/quiz/cluster)
 
 
 

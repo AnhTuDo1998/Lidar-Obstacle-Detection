@@ -160,15 +160,15 @@ void cityBlock(pcl::visualization::PCLVisualizer::Ptr& viewer){
 //City block for viewer loop
 void cityBlock(pcl::visualization::PCLVisualizer::Ptr& viewer, ProcessPointClouds<pcl::PointXYZI>* pointProcessorI, const pcl::PointCloud<pcl::PointXYZI>::Ptr& inputCloud){
     //Parameters for filtering via voxel and ROI
-    float leafSize = 1.0f;
+    float leafSize = 0.17f;
     // 1st: 2nd: Width of road 3rd: Height
-    Eigen::Vector4f minPt(-11.0,-6.5, -4.0, 1.0);
-    Eigen::Vector4f maxPt(20.0, 7.5, 10.0, 1.0);
+    Eigen::Vector4f minPt(-8.0,-6.5, -4.0, 1.0);
+    Eigen::Vector4f maxPt(15.0, 7.5, 10.0, 1.0);
 
     pcl::PointCloud<pcl::PointXYZI>::Ptr filteredCloud = pointProcessorI->FilterCloud(inputCloud, leafSize, minPt, maxPt);
 
     //Process and render the planar and obstacle components
-    auto segmentedPair = pointProcessorI->SegmentPlane(filteredCloud,100,0.2);
+    auto segmentedPair = pointProcessorI->Segment(filteredCloud,25,0.2);
     //Comment out if wants to run faster since basically render the same thing below after clustered
     //renderPointCloud(viewer,segmentedPair.first,"obstacles",Color(1,0,0));
     renderPointCloud(viewer,segmentedPair.second,"segmented plane",Color(0,1,0));
@@ -213,9 +213,6 @@ int main (int argc, char** argv)
     std::vector<boost::filesystem::path> stream = pointProcessorI->streamPcd("../src/sensors/data/pcd/data_1");
     auto streamIterator = stream.begin();
     pcl::PointCloud<pcl::PointXYZI>::Ptr inputCloudI;
-
-    cityBlock(viewer, pointProcessorI, inputCloudI);
-
     while (!viewer->wasStopped ())
     {
 
