@@ -19,7 +19,12 @@ void ProcessPointClouds<PointT>::numPoints(typename pcl::PointCloud<PointT>::Ptr
     std::cout << cloud->points.size() << std::endl;
 }
 
-
+/*
+Input for this function:
+- ptr to point cloud
+- filter resolution (float) -> leaf size
+- minPoint and maxPoint that define the region of interest
+*/
 template<typename PointT>
 typename pcl::PointCloud<PointT>::Ptr ProcessPointClouds<PointT>::FilterCloud(typename pcl::PointCloud<PointT>::Ptr cloud, float filterRes, Eigen::Vector4f minPoint, Eigen::Vector4f maxPoint)
 {
@@ -27,13 +32,45 @@ typename pcl::PointCloud<PointT>::Ptr ProcessPointClouds<PointT>::FilterCloud(ty
     // Time segmentation process
     auto startTime = std::chrono::steady_clock::now();
 
-    // TODO:: Fill in the function to do voxel grid point reduction and region based filtering
+    // First, do voxel fitering to reduce the number of points to a voxel centroid
+    pcl::VoxelGrid<PointT> voxFilter;
+    typename pcl::PointCloud<PointT>::Ptr cloudFiltered(new pcl::PointCloud<PointT>);
+    voxFilter.setInputCloud(cloud);
+    voxFilter.setLeafSize (filterRes, filterRes, filterRes);
+    voxFilter.filter(*cloudFiltered);
+
+    // Then do region of interest stuffs
+    // For simplicity sake, use a static cropbox approach to cut out irrelevant point
+    // A smarter way of RoI can be applied by using SMIRE
+
+    typename pcl::PointCloud<PointT>::Ptr cloudFinalRegion(new pcl::PointCloud<PointT>);
+    pcl::CropBox<PointT> roadBox(true);
+    roadBox.setMin(minPoint);
+    roadBox.setMax(maxPoint);
+    roadBox.setInputCloud(cloudFiltered);
+    roadBox.filter(*cloudFinalRegion);
+
+    //Filter the roof out
+    pcl::CropBox<PointT> roofBox(true);
+    pcl::PointIndices::Ptr inliers (new pcl::PointIndices); // Those that are inside the ROI but not roof
+    //Hard coded
+    roofBox.setMin(Eigen::Vector4f(-1.5,-1.7,-1,1));
+    roofBox.setMax(Eigen::Vector4f(2.6,1.7,-.4,1));
+    roofBox.setInputCloud(cloudFinalRegion);
+    roofBox.filter(inliers->indices);
+
+    //Extract the roof indices - inliers from the point cloud out
+    pcl::ExtractIndices<PointT> extract; //Extractor
+    extract.setInputCloud(cloudFinalRegion);
+    extract.setIndices(inliers);
+    extract.setNegative(true); // To minus away the inliers
+    extract.filter(*cloudFinalRegion); // Inplace filter out
 
     auto endTime = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "filtering took " << elapsedTime.count() << " milliseconds" << std::endl;
 
-    return cloud;
+    return cloudFinalRegion;
 
 }
 
@@ -248,7 +285,7 @@ std::vector<typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::C
     int j = 0;
     for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
     {
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZ>);
+        typename pcl::PointCloud<PointT>::Ptr cloud_cluster (new pcl::PointCloud<PointT>);
         for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); ++pit)
             cloud_cluster->push_back ((*cloud)[*pit]); //*
             cloud_cluster->width = cloud_cluster->size ();
