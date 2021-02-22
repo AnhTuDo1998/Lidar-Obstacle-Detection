@@ -57,13 +57,13 @@ void simpleHighway(pcl::visualization::PCLVisualizer::Ptr& viewer)
     ProcessPointClouds<pcl::PointXYZ> pointProcessor;
 
     //Process and render the planar and obstacle components
-    auto segmentedPair = pointProcessor.SegmentPlane(pointCloudGenerated,100,0.2);
+    auto segmentedPair = pointProcessor.Segment(pointCloudGenerated,100,0.2);
     renderPointCloud(viewer,segmentedPair.first,"obstacles",Color(1,0,0));
     renderPointCloud(viewer,segmentedPair.second,"segmented plane",Color(0,1,0));
 
     //Cluster the obstacles together
     //Get a list of the cluster point clouds based on the obstacles pcd
-    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> cloudClusters = pointProcessor.Clustering(segmentedPair.first, 2.0, 3, 30);
+    std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr> cloudClusters = pointProcessor.ClusteringXYZ(segmentedPair.first, 2.0, 3, 30);
 
     //Prepare a set of colour
     int clusterId = 0;
@@ -107,7 +107,7 @@ void initCamera(CameraAngle setAngle, pcl::visualization::PCLVisualizer::Ptr& vi
 }
 
 //City block unit test with one PCD file
-void cityBlockB(pcl::visualization::PCLVisualizer::Ptr& viewer){
+void cityBlock(pcl::visualization::PCLVisualizer::Ptr& viewer){
     // ----------------------------------------------------
     // -----Open 3D viewer and display City Block     -----
     // ----------------------------------------------------
@@ -123,7 +123,7 @@ void cityBlockB(pcl::visualization::PCLVisualizer::Ptr& viewer){
     Eigen::Vector4f minPt(-11.0,-6.5, -3.8, 1.0);
     Eigen::Vector4f maxPt(20.0, 7.5, 10.0, 1.0);
 
-    pcl::PointCloud<pcl::PointXYZI>::Ptr filteredCloud = pointProcessorI->FilterCloud(inputCloud, 0.1, minPt, maxPt);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr filteredCloud = pointProcessorI->FilterCloud(inputCloud, leafSize, minPt, maxPt);
     
     //renderPointCloud(viewer,filteredCloud,"inputCloud");
 
@@ -132,13 +132,13 @@ void cityBlockB(pcl::visualization::PCLVisualizer::Ptr& viewer){
     // renderBox(viewer,box,999);
 
     //Process and render the planar and obstacle components
-    auto segmentedPair = pointProcessorI->SegmentPlane(filteredCloud,100,0.2);
+    auto segmentedPair = pointProcessorI->Segment(filteredCloud,100,0.2);
     renderPointCloud(viewer,segmentedPair.first,"obstacles",Color(1,0,0));
     renderPointCloud(viewer,segmentedPair.second,"segmented plane",Color(0,1,0));
 
     //Cluster the obstacles together
     //Get a list of the cluster point clouds based on the obstacles pcd
-    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> cloudClusters = pointProcessorI->Clustering(segmentedPair.first, 0.4, 50, 1500);
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> cloudClusters = pointProcessorI->ClusteringXYZ(segmentedPair.first, 0.4, 50, 1500);
 
     //Prepare a set of colour
     int clusterId = 0;
@@ -165,7 +165,7 @@ void cityBlock(pcl::visualization::PCLVisualizer::Ptr& viewer, ProcessPointCloud
     Eigen::Vector4f minPt(-11.0,-6.5, -4.0, 1.0);
     Eigen::Vector4f maxPt(20.0, 7.5, 10.0, 1.0);
 
-    pcl::PointCloud<pcl::PointXYZI>::Ptr filteredCloud = pointProcessorI->FilterCloud(inputCloud, 0.1, minPt, maxPt);
+    pcl::PointCloud<pcl::PointXYZI>::Ptr filteredCloud = pointProcessorI->FilterCloud(inputCloud, leafSize, minPt, maxPt);
 
     //Process and render the planar and obstacle components
     auto segmentedPair = pointProcessorI->SegmentPlane(filteredCloud,100,0.2);
@@ -173,9 +173,9 @@ void cityBlock(pcl::visualization::PCLVisualizer::Ptr& viewer, ProcessPointCloud
     //renderPointCloud(viewer,segmentedPair.first,"obstacles",Color(1,0,0));
     renderPointCloud(viewer,segmentedPair.second,"segmented plane",Color(0,1,0));
 
-    //Cluster the obstacles together
-    //Get a list of the cluster point clouds based on the obstacles pcd
-    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> cloudClusters = pointProcessorI->Clustering(segmentedPair.first, 0.4, 50, 1500);
+    // //Cluster the obstacles together
+    // //Get a list of the cluster point clouds based on the obstacles pcd
+    std::vector<pcl::PointCloud<pcl::PointXYZI>::Ptr> cloudClusters = pointProcessorI->ClusteringXYZ(segmentedPair.first, 0.35 , 50, 1000);
 
     //Prepare a set of colour
     int clusterId = 0;
@@ -203,13 +203,14 @@ int main (int argc, char** argv)
     pcl::visualization::PCLVisualizer::Ptr viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
     CameraAngle setAngle = FPS;
     initCamera(setAngle, viewer);
+    //simpleHighway(viewer);
 
     // Unit testing for cityBlock for 1 PCD file
     // cityBlock(viewer);
 
     // Playback PCD stream
     ProcessPointClouds<pcl::PointXYZI>* pointProcessorI = new ProcessPointClouds<pcl::PointXYZI>();
-    std::vector<boost::filesystem::path> stream = pointProcessorI->streamPcd("../src/sensors/data/pcd/data_2");
+    std::vector<boost::filesystem::path> stream = pointProcessorI->streamPcd("../src/sensors/data/pcd/data_1");
     auto streamIterator = stream.begin();
     pcl::PointCloud<pcl::PointXYZI>::Ptr inputCloudI;
 
